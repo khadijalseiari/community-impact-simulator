@@ -365,6 +365,10 @@ body[dir="rtl"] #autoBar{transform-origin:right;}
       <div class="en" data-i18n="endEn">Community Health Sector programs help create healthier food environments, safer workplaces, active public spaces, stronger prevention services, and healthier everyday choices across the Emirate.</div>
       <div class="ar" data-i18n="endAr">تسهم برامج قطاع صحة المجتمع في توفير بيئات غذائية أكثر صحة، وأماكن عمل أكثر أمانًا، ومساحات عامة داعمة للنشاط البدني، وخدمات وقائية أقوى، وخيارات يومية أكثر صحة في مختلف أنحاء الإمارة.</div>
     </div>
+    <div id="endTapHint" style="margin-top:10px; opacity:.85; font-size:.92em">
+      <div class="en" data-i18n="finaleTip">Tap any activated location to learn more.</div>
+      <div class="ar" data-i18n="finaleTipAr">اضغط على أي موقع تم تفعيله لمعرفة المزيد.</div>
+    </div>
     <div class="endBtns">
       <button class="cta pe" id="againBtn" style="animation:none; margin:0">Play again<small>العب مرة أخرى</small></button>
       <button class="btn pe" id="tourBtn"><span class="ico">🏙️</span><span data-i18n="admire">Admire the city</span></button>
@@ -398,7 +402,8 @@ const I18N = {
     endAr:"تسهم برامج قطاع صحة المجتمع في توفير بيئات غذائية أكثر صحة، وأماكن عمل أكثر أمانًا، ومساحات عامة داعمة للنشاط البدني، وخدمات وقائية أقوى، وخيارات يومية أكثر صحة في مختلف أنحاء الإمارة.",
     sInit:"Initiatives activated", sInitAlt:"مبادرات مُفعّلة", sCombo:"Best combo", sComboAlt:"أفضل تسلسل",
     sSecret:"Hidden discoveries", sSecretAlt:"اكتشافات خفية", sCost:"Healthcare cost cut", sCostAlt:"خفض التكاليف الصحية",
-    comboT:"COMBO", streak:"PERFECT STREAK", secret:"SECRET FOUND", secretAlt:"اكتشاف خفي"
+    comboT:"COMBO", streak:"PERFECT STREAK", secret:"SECRET FOUND", secretAlt:"اكتشاف خفي",
+    finaleTip:"Tap any activated location to learn more.", finaleTipAr:"اضغط على أي موقع تم تفعيله لمعرفة المزيد."
   },
   ar:{
     org:"مركز أبوظبي للصحة العامة", title:"محاكاة أثر المجتمع الصحي",
@@ -419,7 +424,8 @@ const I18N = {
     endAr:"Community Health Sector programs help create healthier food environments, safer workplaces, active public spaces, stronger prevention services, and healthier everyday choices across the Emirate.",
     sInit:"مبادرات مُفعّلة", sInitAlt:"Initiatives activated", sCombo:"أفضل تسلسل", sComboAlt:"Best combo",
     sSecret:"اكتشافات خفية", sSecretAlt:"Hidden discoveries", sCost:"خفض التكاليف الصحية", sCostAlt:"Healthcare cost cut",
-    comboT:"تسلسل", streak:"سلسلة مثالية", secret:"اكتشاف خفي", secretAlt:"SECRET FOUND"
+    comboT:"تسلسل", streak:"سلسلة مثالية", secret:"اكتشاف خفي", secretAlt:"SECRET FOUND",
+    finaleTip:"اضغط على أي موقع تم تفعيله لمعرفة المزيد.", finaleTipAr:"Tap any activated location to learn more."
   }
 };
 let LANG = "en";
@@ -1556,27 +1562,30 @@ const FX = (() => {
 let SESSION_ID = "";
 let START_TIME = 0;
 
+let TAP_COUNT = 0;
+
 function createNewSession(){
   SESSION_ID = crypto.randomUUID
     ? crypto.randomUUID()
     : Date.now() + "-" + Math.random();
   START_TIME = Date.now();
+  TAP_COUNT = 0;
 }
 
-function trackGame(eventName, score = 0){
+function trackGame(eventName, score = 0, extra = {}){
   fetch(
     "https://script.google.com/macros/s/AKfycbwggprOuvupG_JueSSjvWDs7watOXpPigvYvsrhb84u-vxCHgyMtZvuO-xjtvJ_5f8p/exec",
     {
       method:"POST",
       mode:"no-cors",
-      body:JSON.stringify({
+      body:JSON.stringify(Object.assign({
         timestamp: new Date().toISOString(),
         sessionId: SESSION_ID,
         event: eventName,
         score: score,
         duration: Math.round((Date.now()-START_TIME)/1000),
         language: document.documentElement.lang || "en"
-      })
+      }, extra))
     }
   );
 }
@@ -1648,16 +1657,28 @@ const Game = (() => {
     const sec = Scene.hitSecret(w.x, w.y);
     if (sec && !state.secrets.has(sec)){ triggerSecret(sec, w); return; }
     else if (sec){ FX.spark(w.x,w.y,10,{power:140}); Sound.hover(); return; }
-    const cands = SITES.filter(s=> !state.sites[s.id].done)
-      .filter(s=> w.x>=s.rect[0] && w.x<=s.rect[0]+s.rect[2] && w.y>=s.rect[1] && w.y<=s.rect[1]+s.rect[3])
+    const hits = SITES.filter(s=> w.x>=s.rect[0] && w.x<=s.rect[0]+s.rect[2] && w.y>=s.rect[1] && w.y<=s.rect[1]+s.rect[3])
       .sort((a,b)=> a.rect[2]*a.rect[3] - b.rect[2]*b.rect[3]);
+    const cands = hits.filter(s=> !state.sites[s.id].done);
     if (cands.length){ activate(cands[0], w); return; }
+    if (hits.length){ reopen(hits[0]); return; }
     if (SITES.every(s=> state.sites[s.id].done)){
       FX.spark(w.x, w.y, 16, {power:180}); FX.ring(w.x, w.y, "#2BE3DF", 90); Sound.hover();
       return;
     }
     state.combo = 0; state.misses++; Sound.wrong();
     FX.ring(w.x,w.y,"rgba(255,255,255,.5)",70);
+  }
+
+  function reopen(site){
+    Sound.hover();
+    UI.openPopup(site);
+    TAP_COUNT++;
+    trackGame(
+      "PROGRAM_REOPENED:" + (SITE_PROGRAM_CODE[site.id] || site.id.toUpperCase()),
+      0,
+      { programName: site.init.en, tapCount: TAP_COUNT }
+    );
   }
 
   function triggerSecret(kind, w){
@@ -1674,7 +1695,12 @@ const Game = (() => {
     const S = state.sites[site.id];
     S.done = true; S.target = 1; S.label = 3.2;
     shake = 1; hintTimer = 0;
-    trackGame("PROGRAM_ACTIVATED:" + (SITE_PROGRAM_CODE[site.id] || site.id.toUpperCase()));
+    TAP_COUNT++;
+    trackGame(
+      "PROGRAM_ACTIVATED:" + (SITE_PROGRAM_CODE[site.id] || site.id.toUpperCase()),
+      0,
+      { programName: site.init.en, tapCount: TAP_COUNT }
+    );
     const now = state.time;
     state.combo = (now - state.lastHit < 6) ? state.combo+1 : 1;
     state.lastHit = now;
@@ -1733,7 +1759,7 @@ const Game = (() => {
     UI.buildEndStats();
     document.getElementById("endScreen").classList.remove("gone");
     FX.confetti(120);
-    trackGame("GAME_COMPLETED", 100);
+    trackGame("GAME_COMPLETED", 100, { tapCount: TAP_COUNT });
   }
 
   function frame(ts){
